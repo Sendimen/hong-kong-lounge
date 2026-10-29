@@ -31,7 +31,8 @@ jobs:
         run: npm ci --no-audit --no-fund
       - name: Derle (SIM + BSA + portal; SIM şifreli)
         working-directory: kaynak/simfleet
-        env: { SIM_KEY: ${{ secrets.SIM_KEY }} }
+        env:
+          SIM_KEY: ${{ secrets.SIM_KEY }}
         run: node build-lounge.mjs
       - name: Doğrula
         working-directory: kaynak/simfleet
@@ -45,7 +46,9 @@ jobs:
   yayin:
     needs: derle
     runs-on: ubuntu-latest
-    environment: { name: github-pages, url: ${{ steps.deploy.outputs.page_url }} }
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - id: deploy
         uses: actions/deploy-pages@v4
