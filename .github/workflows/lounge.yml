@@ -1,0 +1,51 @@
+# HONG KONG LOUNGE — otomatik yayın (29 Eki 2026). Bu dosya hong-kong-lounge deposunda durur; loadmaster'a DOKUNMAZ (yalnız okur).
+# Ne yapar: loadmaster deposunu (yalnız okuma anahtarıyla) indirir, SIM + BSA + portalı derler, SIM'i AES-256-GCM ile şifreler
+# (anahtar: SIM_KEY gizli değeri — Supabase bsa_gizli.sim_anahtar ile AYNI), sonucu GitHub Pages'e yayınlar.
+# Gizli değerler (bu depo → Settings → Secrets and variables → Actions): KAYNAK_TOKEN (loadmaster için Contents: Read-only fine-grained PAT), SIM_KEY.
+# Pages: bu depo → Settings → Pages → Source: "GitHub Actions". Çalıştırma: Actions → lounge → Run workflow (ya da 6 saatte bir kendiliğinden).
+name: lounge
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '23 */6 * * *'
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency: { group: lounge, cancel-in-progress: true }
+jobs:
+  derle:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Kaynak (loadmaster, yalnız okuma)
+        uses: actions/checkout@v4
+        with:
+          repository: Sendimen/loadmaster
+          token: ${{ secrets.KAYNAK_TOKEN }}
+          path: kaynak
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+      - name: Bağımlılıklar
+        working-directory: kaynak/simfleet
+        run: npm ci --no-audit --no-fund
+      - name: Derle (SIM + BSA + portal; SIM şifreli)
+        working-directory: kaynak/simfleet
+        env: { SIM_KEY: ${{ secrets.SIM_KEY }} }
+        run: node build-lounge.mjs
+      - name: Doğrula
+        working-directory: kaynak/simfleet
+        run: |
+          test -s dist/site/index.html && test -s dist/site/bsa/index.html && test -s dist/site/sim/cargo-sim.enc
+          grep -q "Hong Kong Lounge" dist/site/index.html
+          if grep -q "<!doctype html" dist/site/sim/cargo-sim.enc; then echo "ŞİFRELİ DOSYADA DÜZ HTML VAR"; exit 1; fi
+          ls -la dist/site dist/site/bsa dist/site/sim
+      - uses: actions/upload-pages-artifact@v3
+        with: { path: kaynak/simfleet/dist/site }
+  yayin:
+    needs: derle
+    runs-on: ubuntu-latest
+    environment: { name: github-pages, url: ${{ steps.deploy.outputs.page_url }} }
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4
